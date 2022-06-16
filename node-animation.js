@@ -6,6 +6,9 @@ NODE_ANIMATION.deltaT = 0.025;
 NODE_ANIMATION.camera = null;
 NODE_ANIMATION.scene = null;
 NODE_ANIMATION.renderer = null;
+NODE_ANIMATION.bloomComposer = null;
+NODE_ANIMATION.finalComposer = null;
+
 NODE_ANIMATION.nodes = [];
 NODE_ANIMATION.edges = { fadingIn: [], visible: [], fadingOut: [] };
 NODE_ANIMATION.fadeLength = 500;
@@ -18,6 +21,34 @@ NODE_ANIMATION.size = { width: null, height: null, canvasWidth: null, canvasHeig
 NODE_ANIMATION.planes = { near: 0.01, far: 1000 };
 NODE_ANIMATION.zPosition = 50;
 NODE_ANIMATION.mouse = { x: 0, y: 0 };
+NODE_ANIMATION.ENTIRE_SCENE = 0;
+NODE_ANIMATION.BLOOM_SCENE = 1;
+
+
+function vertexShader() {
+	return `
+		varying vec2 vUv;
+
+		void main() {
+			vUv = uv;
+			gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+		}
+	`
+}
+
+function fragmentShader() {
+	return `
+		uniform sampler2D baseTexture;
+		uniform sampler2D bloomTexture;
+		
+		varying vec2 vUv;
+
+		void main() {
+			gl_FragColor = ( texture2D( baseTexture, vUv ) + vec4( 1.0 ) * texture2D( bloomTexture, vUv ) );
+		}
+	`
+}
+
 
 // Converts an angle in degrees to radians (camera FOV is in degrees, but calculations need radians).
 NODE_ANIMATION.DegreesToRadians = function(theta) {
@@ -43,7 +74,13 @@ NODE_ANIMATION.Resize = function(width, height) {
 	NODE_ANIMATION.camera.updateProjectionMatrix();
 	
 	NODE_ANIMATION.renderer.setSize(NODE_ANIMATION.size.width, NODE_ANIMATION.size.height);
+	NODE_ANIMATION.bloomComposer.setSize(NODE_ANIMATION.size.width, NODE_ANIMATION.size.height);
+	NODE_ANIMATION.finalComposer.setSize(NODE_ANIMATION.size.width, NODE_ANIMATION.size.height);
+
+	NODE_ANIMATION.Render();
 }
+
+
 
 NODE_ANIMATION.NodeAnimation = function(width, height) {
 	NODE_ANIMATION.size.width = width;
@@ -53,16 +90,7 @@ NODE_ANIMATION.NodeAnimation = function(width, height) {
 	NODE_ANIMATION.mouse.y = NODE_ANIMATION.size.height / 2;
 	
 	// Setup camera.
-	try {
-		NODE_ANIMATION.camera = new THREE.PerspectiveCamera(NODE_ANIMATION.fov, NODE_ANIMATION.size.width / NODE_ANIMATION.size.height, NODE_ANIMATION.planes.near, NODE_ANIMATION.planes.far);
-	}
-	catch(err) {
-		if (err.name == "ReferenceError" && err.message == "THREE is not defined")
-			throw "- This code requires Three.js!";
-		else
-			throw err;
-	}
-	
+	NODE_ANIMATION.camera = new THREE.PerspectiveCamera(NODE_ANIMATION.fov, NODE_ANIMATION.size.width / NODE_ANIMATION.size.height, NODE_ANIMATION.planes.near, NODE_ANIMATION.planes.far);
 	NODE_ANIMATION.camera.position.z = NODE_ANIMATION.zPosition;
 	
 	// Setup scene.
@@ -71,6 +99,56 @@ NODE_ANIMATION.NodeAnimation = function(width, height) {
 	
 	NODE_ANIMATION.scene = new THREE.Scene();
 	
+	// Setup renderer.
+	NODE_ANIMATION.renderer = new THREE.WebGLRenderer( { antialias: true } );
+	NODE_ANIMATION.renderer.setClearColor(0x000005, 1.0)
+	//NODE_ANIMATION.renderer.setPixelRatio(window.devicePixelRatio); ///////////////////////////////////////////////////////////////////////////////////////////////////////////// ?
+	NODE_ANIMATION.renderer.setSize(NODE_ANIMATION.size.width, NODE_ANIMATION.size.height);
+	document.body.appendChild(NODE_ANIMATION.renderer.domElement);
+	
+	const renderScene = new THREE.RenderPass(NODE_ANIMATION.scene, NODE_ANIMATION.camera);
+
+	const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(NODE_ANIMATION.size.width, NODE_ANIMATION.size.height), 1.5, 0.4, 0.85);
+	bloomPass.threshold = 0;
+	bloomPass.strength = 2;
+	bloomPass.radius = 1;
+
+	NODE_ANIMATION.bloomComposer = new THREE.EffectComposer(NODE_ANIMATION.renderer);
+	NODE_ANIMATION.bloomComposer.renderToScreen = false;
+	NODE_ANIMATION.bloomComposer.addPass(renderScene);
+	NODE_ANIMATION.bloomComposer.addPass(bloomPass);
+
+	const finalPass = new THREE.ShaderPass(
+		new THREE.ShaderMaterial( {
+			uniforms: {
+				baseTexture: { value: null },
+				bloomTexture: { value: NODE_ANIMATION.bloomComposer.renderTarget2.texture }
+			},
+			vertexShader: vertexShader(),
+			fragmentShader: fragmentShader(),
+			defines: {}
+		} ), 'baseTexture'
+	);
+	finalPass.needsSwap = true;
+
+	NODE_ANIMATION.finalComposer = new THREE.EffectComposer(NODE_ANIMATION.renderer);
+	NODE_ANIMATION.finalComposer.addPass(renderScene);
+	NODE_ANIMATION.finalComposer.addPass(finalPass);
+
+	NODE_ANIMATION.SetupScene();
+	
+	// Start animation loop.
+	NODE_ANIMATION.Animate();
+}
+
+NODE_ANIMATION.Render = function() {
+	NODE_ANIMATION.camera.layers.set(NODE_ANIMATION.BLOOM_SCENE);
+	NODE_ANIMATION.bloomComposer.render();
+	NODE_ANIMATION.camera.layers.set(NODE_ANIMATION.ENTIRE_SCENE);
+	NODE_ANIMATION.finalComposer.render();
+}
+
+NODE_ANIMATION.SetupScene = function() {
 	// Create nodes.
 	let x, y, z, xVel, yVel, zVel, weight, colour;
 	
@@ -84,20 +162,11 @@ NODE_ANIMATION.NodeAnimation = function(width, height) {
 		yVel = (Math.random() * 2) - 1;
 		zVel = (Math.random() * 2) - 1;
 		
-		weight = Math.random();
+		weight = 1; //Math.random();
 		colour = Math.floor(256 * Math.random()) * 65793; // 65793 = (2^8)^0 + (2^8)^1 + (2^8)^2 which, when multiplied by an integer (0 <= x < 256), will output a greyscale colour.
 		
 		NODE_ANIMATION.nodes[i] = new BackgroundNode(x, y, z, xVel, yVel, zVel, weight, colour);
 	}
-	
-	// Setup renderer.
-	NODE_ANIMATION.renderer = new THREE.WebGLRenderer();
-	NODE_ANIMATION.renderer.setClearColor(0x080823, 1.0)
-	NODE_ANIMATION.renderer.setSize(NODE_ANIMATION.size.width, NODE_ANIMATION.size.height);
-	document.body.appendChild(NODE_ANIMATION.renderer.domElement);
-	
-	// Start animation loop.
-	NODE_ANIMATION.Animate();
 }
 
 NODE_ANIMATION.GetBoundaryForces = function(x, y, z) {
@@ -131,7 +200,6 @@ NODE_ANIMATION.GetBoundaryForces = function(x, y, z) {
 	
 	return {x: xAccel, y: yAccel, z: zAccel};
 }
-
 
 NODE_ANIMATION.RemoveEdges = function(chance) {
 	// Iterate through all edges and remove some of them.
@@ -265,6 +333,7 @@ NODE_ANIMATION.Animate = function() {
 	NODE_ANIMATION.UpdateFadeOutEdges();
 
 	NODE_ANIMATION.renderer.render(NODE_ANIMATION.scene, NODE_ANIMATION.camera);
+	NODE_ANIMATION.Render();
 }
 
 NODE_ANIMATION.UpdateMouse = function(x, y) {
@@ -294,6 +363,7 @@ class BackgroundNode {
 		var nodeMaterial = new THREE.MeshBasicMaterial( { color: colour, transparent : true, opacity : this.weight * NODE_ANIMATION.maxWeight } );
 		
 		this.node = new THREE.Mesh(nodeGeometry, nodeMaterial);
+		this.node.layers.enable(NODE_ANIMATION.BLOOM_SCENE);
 		
 		NODE_ANIMATION.scene.add(this.node);
 	}
@@ -381,6 +451,7 @@ class BackgroundEdge {
 		this.lineGeometry.setAttribute('position', new THREE.BufferAttribute(this.lineData, 3));
 		
 		this.line = new THREE.Line(this.lineGeometry, this.lineMaterial);
+		this.line.layers.enable(NODE_ANIMATION.BLOOM_SCENE);
 		
 		NODE_ANIMATION.scene.add(this.line);
 	}
