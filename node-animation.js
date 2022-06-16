@@ -20,8 +20,29 @@ NODE_ANIMATION.zPosition = 50;
 NODE_ANIMATION.mouse = { x: 0, y: 0 };
 
 // Converts an angle in degrees to radians (camera FOV is in degrees, but calculations need radians).
-NODE_ANIMATION.degreesToRadians = function(theta) {
+NODE_ANIMATION.DegreesToRadians = function(theta) {
 	return Math.PI * (theta / 180);
+}
+
+NODE_ANIMATION.Resize = function(width, height) {
+	let oldWidth = NODE_ANIMATION.size.width;
+	let oldHeight = NODE_ANIMATION.size.height;
+	
+	for (let i = 0; i < NODE_ANIMATION.nodeCount; i++) {
+		NODE_ANIMATION.nodes[i].x *= (width / oldWidth);
+		NODE_ANIMATION.nodes[i].y *= (height / oldHeight);
+	}
+	
+	NODE_ANIMATION.size.width = width;
+	NODE_ANIMATION.size.height = height;
+	
+	NODE_ANIMATION.size.canvasHeight = 2 * (NODE_ANIMATION.zPosition * Math.sin(NODE_ANIMATION.DegreesToRadians(NODE_ANIMATION.fov / 2)) / Math.sin(NODE_ANIMATION.DegreesToRadians(90 - NODE_ANIMATION.fov / 2)));
+	NODE_ANIMATION.size.canvasWidth = (NODE_ANIMATION.size.width / NODE_ANIMATION.size.height) * NODE_ANIMATION.size.canvasHeight;
+	
+	NODE_ANIMATION.camera.aspect = NODE_ANIMATION.size.width / NODE_ANIMATION.size.height;
+	NODE_ANIMATION.camera.updateProjectionMatrix();
+	
+	NODE_ANIMATION.renderer.setSize(NODE_ANIMATION.size.width, NODE_ANIMATION.size.height);
 }
 
 NODE_ANIMATION.NodeAnimation = function(width, height) {
@@ -45,7 +66,7 @@ NODE_ANIMATION.NodeAnimation = function(width, height) {
 	NODE_ANIMATION.camera.position.z = NODE_ANIMATION.zPosition;
 	
 	// Setup scene.
-	NODE_ANIMATION.size.canvasHeight = 2 * (NODE_ANIMATION.zPosition * Math.sin(NODE_ANIMATION.degreesToRadians(NODE_ANIMATION.fov / 2)) / Math.sin(NODE_ANIMATION.degreesToRadians(90 - NODE_ANIMATION.fov / 2)));
+	NODE_ANIMATION.size.canvasHeight = 2 * (NODE_ANIMATION.zPosition * Math.sin(NODE_ANIMATION.DegreesToRadians(NODE_ANIMATION.fov / 2)) / Math.sin(NODE_ANIMATION.DegreesToRadians(90 - NODE_ANIMATION.fov / 2)));
 	NODE_ANIMATION.size.canvasWidth = (NODE_ANIMATION.size.width / NODE_ANIMATION.size.height) * NODE_ANIMATION.size.canvasHeight;
 	
 	NODE_ANIMATION.scene = new THREE.Scene();
@@ -76,10 +97,10 @@ NODE_ANIMATION.NodeAnimation = function(width, height) {
 	document.body.appendChild(NODE_ANIMATION.renderer.domElement);
 	
 	// Start animation loop.
-	NODE_ANIMATION.animate();
+	NODE_ANIMATION.Animate();
 }
 
-NODE_ANIMATION.getBoundaryForces = function(x, y, z) {
+NODE_ANIMATION.GetBoundaryForces = function(x, y, z) {
 	// Calculate the forces to be exerted on nodes, in order to keep them mostly in frame.
 	// Since the nodes all have the same weight, some constant k, we can use force and acceleration synonymously.
 	let xAccel = 0;
@@ -112,7 +133,7 @@ NODE_ANIMATION.getBoundaryForces = function(x, y, z) {
 }
 
 
-NODE_ANIMATION.removeEdges = function(chance) {
+NODE_ANIMATION.RemoveEdges = function(chance) {
 	// Iterate through all edges and remove some of them.
 	toRemove = [];
 	
@@ -127,7 +148,7 @@ NODE_ANIMATION.removeEdges = function(chance) {
 	}
 }
 
-NODE_ANIMATION.lineInEdges = function(lines, nodeA, nodeB) {
+NODE_ANIMATION.LineInEdges = function(lines, nodeA, nodeB) {
 	// Go through all edges and return true if the passed nodes are in it.
 	for (let k = 0; k < lines.length; k++) {
 		if (lines[k].hasNode(nodeA)  && lines[k].hasNode(nodeB)) {
@@ -138,7 +159,7 @@ NODE_ANIMATION.lineInEdges = function(lines, nodeA, nodeB) {
 	return false;
 }
 
-NODE_ANIMATION.addEdges = function(chance) {
+NODE_ANIMATION.AddEdges = function(chance) {
 	// Iterate through all nodes and add some edges to them.
 	
 	// If there are already the maximum number of edges, return.
@@ -150,9 +171,9 @@ NODE_ANIMATION.addEdges = function(chance) {
 		for (let j = 1; j < NODE_ANIMATION.nodeCount; j++) {
 			// For every unique tuple of nodes, if there is no pre-existing edge between them, there is a certain chance it will be added to the collection of edges to fade in.
 			if (Math.random() < chance &&
-					!NODE_ANIMATION.lineInEdges(NODE_ANIMATION.edges.visible, NODE_ANIMATION.nodes[i], NODE_ANIMATION.nodes[j]) &&
-					!NODE_ANIMATION.lineInEdges(NODE_ANIMATION.edges.fadingIn, NODE_ANIMATION.nodes[i], NODE_ANIMATION.nodes[j]) &&
-					!NODE_ANIMATION.lineInEdges(NODE_ANIMATION.edges.fadingOut, NODE_ANIMATION.nodes[i], NODE_ANIMATION.nodes[j])) {
+					!NODE_ANIMATION.LineInEdges(NODE_ANIMATION.edges.visible, NODE_ANIMATION.nodes[i], NODE_ANIMATION.nodes[j]) &&
+					!NODE_ANIMATION.LineInEdges(NODE_ANIMATION.edges.fadingIn, NODE_ANIMATION.nodes[i], NODE_ANIMATION.nodes[j]) &&
+					!NODE_ANIMATION.LineInEdges(NODE_ANIMATION.edges.fadingOut, NODE_ANIMATION.nodes[i], NODE_ANIMATION.nodes[j])) {
 						
 				NODE_ANIMATION.edges.fadingIn.push(new BackgroundEdge(NODE_ANIMATION.nodes[i], NODE_ANIMATION.nodes[j], Math.random()));
 			}
@@ -160,7 +181,7 @@ NODE_ANIMATION.addEdges = function(chance) {
 	}
 }
 
-NODE_ANIMATION.updateNodes = function() {
+NODE_ANIMATION.UpdateNodes = function() {
 	// Update and draw all node.
 	for (let i = 0; i < NODE_ANIMATION.nodeCount; i++) {
 		NODE_ANIMATION.nodes[i].update();
@@ -168,7 +189,7 @@ NODE_ANIMATION.updateNodes = function() {
 	}
 }
 
-NODE_ANIMATION.updateEdges = function() {
+NODE_ANIMATION.UpdateEdges = function() {
 	// Update and draw all edges.
 	for (let i = 0; i < NODE_ANIMATION.edges.visible.length; i++) {
 		NODE_ANIMATION.edges.visible[i].update();
@@ -176,7 +197,7 @@ NODE_ANIMATION.updateEdges = function() {
 	}
 }
 
-NODE_ANIMATION.updateFadeInEdges = function() {
+NODE_ANIMATION.UpdateFadeInEdges = function() {
 	let fadedIn = []
 	
 	// Iterate through all fadeInEdges and, if it has been faded in fully, add its index to a stack.
@@ -198,7 +219,7 @@ NODE_ANIMATION.updateFadeInEdges = function() {
 	}
 }
 
-NODE_ANIMATION.updateFadeOutEdges = function() {
+NODE_ANIMATION.UpdateFadeOutEdges = function() {
 	let fadedOut = []
 	
 	// Iterate through all fadeOutEdges and, if it has been faded out fully, add its index to a stack.
@@ -220,8 +241,8 @@ NODE_ANIMATION.updateFadeOutEdges = function() {
 	}
 }
 
-NODE_ANIMATION.animate = function() {
-	requestAnimationFrame(NODE_ANIMATION.animate);
+NODE_ANIMATION.Animate = function() {
+	requestAnimationFrame(NODE_ANIMATION.Animate);
 	
 	let perFrameRem = 0.2;
 	let perFrameAdd = 0.3;
@@ -235,18 +256,18 @@ NODE_ANIMATION.animate = function() {
 	let chanceRem = perFrameRem / NODE_ANIMATION.maxEdges;
 	let chanceAdd = perFrameAdd / ((NODE_ANIMATION.nodeCount - 1) * (NODE_ANIMATION.nodeCount - 1));
 	
-	NODE_ANIMATION.removeEdges(chanceRem); // On average, k * 0.001 edges (where k = maxEdges) will be removed (0.2) per frame.
-	NODE_ANIMATION.addEdges(chanceAdd); // On average, (n-1) * (n-1) * 0.00005 edges will be added (where n = nodeCount) will be added (0.31) per frame - assuming not already at maximum edges.
+	NODE_ANIMATION.RemoveEdges(chanceRem); // On average, k * 0.001 edges (where k = maxEdges) will be removed (0.2) per frame.
+	NODE_ANIMATION.AddEdges(chanceAdd); // On average, (n-1) * (n-1) * 0.00005 edges will be added (where n = nodeCount) will be added (0.31) per frame - assuming not already at maximum edges.
 	
-	NODE_ANIMATION.updateNodes();
-	NODE_ANIMATION.updateEdges();
-	NODE_ANIMATION.updateFadeInEdges();
-	NODE_ANIMATION.updateFadeOutEdges();
+	NODE_ANIMATION.UpdateNodes();
+	NODE_ANIMATION.UpdateEdges();
+	NODE_ANIMATION.UpdateFadeInEdges();
+	NODE_ANIMATION.UpdateFadeOutEdges();
 
 	NODE_ANIMATION.renderer.render(NODE_ANIMATION.scene, NODE_ANIMATION.camera);
 }
 
-NODE_ANIMATION.updateMouse = function(x, y) {
+NODE_ANIMATION.UpdateMouse = function(x, y) {
 	NODE_ANIMATION.mouse.x = x;
 	NODE_ANIMATION.mouse.y = y;
 }
@@ -279,7 +300,7 @@ class BackgroundNode {
 	
 	update() {
 		// Calculate the new velocities and positions.
-		let forces = NODE_ANIMATION.getBoundaryForces(this.x, this.y, this.z);
+		let forces = NODE_ANIMATION.GetBoundaryForces(this.x, this.y, this.z);
 
 		
 		// v = u + at.
