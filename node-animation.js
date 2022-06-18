@@ -14,7 +14,7 @@ NODE_ANIMATION.edges = { fadingIn: [], visible: [], fadingOut: [] };
 NODE_ANIMATION.fadeLength = 500;
 NODE_ANIMATION.nodeCount = 40;
 NODE_ANIMATION.maxEdges = 100;
-NODE_ANIMATION.maxWeight = 0.5;
+NODE_ANIMATION.maxWeight = 0.4;
 NODE_ANIMATION.fov = 70;
 NODE_ANIMATION.speed = { min: 0.5, max: 1 };
 NODE_ANIMATION.size = { width: null, height: null, canvasWidth: null, canvasHeight: null };
@@ -110,7 +110,7 @@ NODE_ANIMATION.NodeAnimation = function(width, height) {
 
 	const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(NODE_ANIMATION.size.width, NODE_ANIMATION.size.height), 1.5, 0.4, 0.85);
 	bloomPass.threshold = 0;
-	bloomPass.strength = 2;
+	bloomPass.strength = 3;
 	bloomPass.radius = 1;
 
 	NODE_ANIMATION.bloomComposer = new THREE.EffectComposer(NODE_ANIMATION.renderer);
